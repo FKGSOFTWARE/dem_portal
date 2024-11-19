@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>DEM Image Annotator</title>
+    <script src="https://cdn.jsdelivr.net/npm/konva@8.3.5/konva.min.js"></script>
+    <style>
+        /* Ensure the html and body elements take up the full height */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevent scrolling */
+        }
+
+        /* Use Flexbox to structure the body */
+        body {
+            display: flex;
+            flex-direction: column;
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+        }
+
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-sizing: border-box;
+            height: 60px;
+            flex-shrink: 0;
+            z-index: 1000;
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            flex: 1;
+            text-align: left;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+            flex: 2;
+        }
+
+        .progress-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            justify-content: flex-end;
+        }
+
+        .tool-button {
+            background-color: #34495e;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin: 0 2px;
+            font-size: 14px;
+        }
+
+        .tool-button:hover {
+            background-color: #2c3e50;
+        }
+
+        .tool-button.selected {
+            background-color: #e74c3c;
+            box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.3);
+            transform: scale(1.05);
+        }
+
+        .tool-button i {
+            font-size: 16px;
+        }
+
+        #progress-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #progress-bar {
+            width: 150px;
+            height: 10px;
+            appearance: none;
+            -webkit-appearance: none;
+            border: none;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        #progress-bar::-webkit-progress-bar {
+            background-color: #34495e;
+        }
+
+        #progress-bar::-webkit-progress-value {
+            background-color: #e74c3c;
+        }
+
+        #progress-bar::-moz-progress-bar {
+            background-color: #e74c3c;
+        }
+
+        #progress-text {
+            color: white;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        /* Adjust the content-wrapper to use Flexbox */
+        .content-wrapper {
+            flex: 1;
+            position: relative;
+            display: flex;
+            background-color: #f0f2f5;
+            overflow: hidden; /* Prevent scrolling */
+        }
+
+        /* Modify #container to prevent overlapping and fill available space */
+        #container {
+            flex: 1;
+            background-color: white;
+            z-index: 1;
+        }
+
+        /* Cursor styles */
+        #container.pan-cursor {
+            cursor: grab;
+        }
+
+        #container.pan-cursor:active {
+            cursor: grabbing;
+        }
+
+        #container.rectangle-cursor,
+        #container.circle-cursor {
+            cursor: crosshair;
+        }
+
+        #container.freehand-cursor {
+            cursor: crosshair;
+        }
+
+        #container.zoom-in-cursor {
+            cursor: zoom-in;
+        }
+
+        #container.zoom-out-cursor {
+            cursor: zoom-out;
+        }
+
+        #footer {
+            /* Remove fixed positioning and include in Flexbox layout */
+            position: relative;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            box-sizing: border-box;
+            flex-shrink: 0;
+            z-index: 1000;
+        }
+
+        #footer p {
+            margin: 5px 0;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none; /* Initially hidden */
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 300px;
+            text-align: center;
+            border-radius: 8px;
+        }
+
+        .modal-content h2 {
+            margin-top: 0;
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .modal-content button {
+            background-color: #2c3e50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .modal-content button:hover {
+            background-color: #34495e;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title">DEM Image Annotator</div>
+        <div class="toolbar">
+            <!-- Drawing Tool Buttons -->
+            <button id="pan" class="tool-button drawing-tool-button selected">
+                <i>↔</i> Pan
+            </button>
+            <button id="rectangle" class="tool-button drawing-tool-button">
+                <i>□</i> Rectangle
+            </button>
+            <button id="circle" class="tool-button drawing-tool-button">
+                <i>◯</i> Ellipse
+            </button>
+            <button id="freehand" class="tool-button drawing-tool-button">
+                <i>✎</i> Freehand
+            </button>
+
+            <!-- Other Buttons -->
+            <button id="undo" class="tool-button">
+                <i>↶</i> Undo
+            </button>
+            <button id="redo" class="tool-button">
+                <i>↷</i> Redo
+            </button>
+            <button id="zoom-in" class="tool-button">
+                <i>🔍+</i> Zoom In
+            </button>
+            <button id="zoom-out" class="tool-button">
+                <i>🔍-</i> Zoom Out
+            </button>
+            <button id="done" class="tool-button">
+                <i>✓</i> Done
+            </button>
+        </div>
+        <div id="progress-container" class="progress-section">
+            <progress id="progress-bar" value="0" max="100"></progress>
+            <span id="progress-text">0 / 0 images annotated</span>
+        </div>
+    </div>
+
+    <div class="content-wrapper">
+        <div id="container"></div>
+    </div>
+
+    <div id="footer">
+        <p>Use the tools above to annotate the image. When finished, click <strong>"Done"</strong> to save and proceed to the next image.</p>
+        <p>Hold the spacebar at any time to temporarily activate the pan tool.</p>
+    </div>
+
+    <!-- User Name Modal -->
+    <div id="user-name-modal" class="modal">
+        <div class="modal-content">
+            <h2>Please Enter Your Name</h2>
+            <input type="text" id="user-name-input" placeholder="Your Name" />
+            <button id="user-name-submit">Submit</button>
+        </div>
+    </div>
+
+    <script src="/static/main.js"></script>
+</body>
+</html>
